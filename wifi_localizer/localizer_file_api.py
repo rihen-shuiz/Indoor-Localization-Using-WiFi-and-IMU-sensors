@@ -201,6 +201,17 @@ class WifiFileLocalizer2:
         wifi_window_ms: int = 600,   # kept only for minimal API change; no longer used
         max_dt_ms: int = 50,         # kept only for minimal API change; exact ts is required now
     ):
+        """Initializes the positioning engine and boots up the radio map.
+
+        Args:
+            radiomap_csv (str): File path to the pre-recorded reference database.
+            dataset_dir (str): Directory folder containing the test query logs.
+            k (int, optional): Number of nearest neighbors to evaluate. Defaults to 3.
+            min_overlap (int, optional): Minimum required shared BSSIDs. Defaults to 20.
+            wifi_window_ms (int, optional): Legacy parameter; retained for compatibility.
+            max_dt_ms (int, optional): Legacy parameter; retained for compatibility.
+        """
+
         self.dataset_dir = dataset_dir
         self.k = int(k)
         self.min_overlap = int(min_overlap)
@@ -214,23 +225,43 @@ class WifiFileLocalizer2:
         self._current_run_id: Optional[str] = None
 
     def _load_radiomap(self, path: str):
+        """Loads and structures the offline radio map fingerprint database.
+
+        This method reads the reference database, filters out valid BSSID columns, 
+        cleans corrupted entries, and converts the coordinate data and signal 
+        strengths into contiguous NumPy matrices for high-speed broadcasting.
+
+        Args:
+            path (str): File path to the radio map CSV database.
+
+        Raises:
+            ValueError: If the file lacks 'x' or 'y' coordinate columns, 
+                or contains no columns matching a valid MAC address format.
+        """
+
         rm = pd.read_csv(path)
         if "x" not in rm.columns or "y" not in rm.columns:
             raise ValueError("Radiomap must contain x and y columns.")
 
+        # Extract only columns that represent valid WiFi MAC addresses
         wifi_cols = [c for c in rm.columns if norm_mac(c) is not None]
         if not wifi_cols:
             raise ValueError("No BSSID columns found in radiomap.")
 
+        # Batch-convert text strings to numbers; force corrupted entries to NaNs
         rm[wifi_cols] = rm[wifi_cols].apply(pd.to_numeric, errors="coerce")
         rm["x"] = pd.to_numeric(rm["x"], errors="coerce")
         rm["y"] = pd.to_numeric(rm["y"], errors="coerce")
+
+        # Drop rows missing ground-truth coordinates; they are useless for positioning
         rm = rm.dropna(subset=["x", "y"]).reset_index(drop=True)
 
         self.wifi_cols = wifi_cols
+        
+        # Inverted index map: maps a BSSID string to its static column array index
         self.feat_index = {norm_mac(c): i for i, c in enumerate(wifi_cols)}
-        self.train_X = rm[wifi_cols].to_numpy(dtype=float)
-        self.train_Y = rm[["x", "y"]].to_numpy(dtype=float)
+        self.train_X = rm[wifi_cols].to_numpy(dtype=float)   # Shape: (M, N) signals
+        self.train_Y = rm[["x", "y"]].to_numpy(dtype=float)  # Shape: (M, 2) coordinates
 
     def _load_file_scans(self, file_name: str):
         if file_name in self._scan_cache:
@@ -250,6 +281,24 @@ class WifiFileLocalizer2:
         """
         Exact timestamp match only.
         """
+        """Identifies the chronologically closest WiFi scan matching a target timestamp.
+
+        Using a binary search, this method inspects the immediate temporal 
+        neighborhood of the target timestamp to locate the closest physical log record. 
+        Matches that exceed the maximum synchronization threshold (max_dt_ms) are 
+        rejected as stale data.
+
+        Args:
+            ts_arr (np.ndarray): 1D array of shape (S,) containing sorted, valid log timestamps.
+            scans (List[Dict[str, float]]): List of length S mapping BSSID strings to RSSI values.
+            t_ms (int): The current reference simulation timestamp to be matched.
+
+        Returns:
+            Tuple[Optional[int], Optional[Dict[str, float]]]: A paired tuple containing:
+                - chosen_ts (int or None): The actual log timestamp selected, or None if rejected.
+                - scan_payload (dict or None): The dictionary of router signals, or None if rejected.
+        """
+        
         if ts_arr.size == 0:
             print("zero array")
             return None, None
