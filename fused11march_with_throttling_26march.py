@@ -98,6 +98,17 @@ TRAJS = {
     },
 }
 
+C4BLOCK = {
+    'traj1': {
+        'imu': 'C4\\traj1\\imu_the_first_trajectory_20260624_161031_structured.csv',
+        'gt': 'C4\\traj1\\traj_the_first_trajectory_20260624_161031_structured.csv',
+        'wifi_dir': 'C4\\traj1',
+        'wifi_file': 'wifi_the_first_trajectory_20260624_161031_structured',
+        'base': os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             'C4')
+    },
+}
+
 # ─────────────────────────────────────────────────────────────
 # WIFI THROTTLING
 # ─────────────────────────────────────────────────────────────

@@ -93,6 +93,19 @@ TRAJS = {
     ),
 }
 
+C4BLOCK = {
+    'traj1': (
+        'C4\\traj1\\imu_the_first_trajectory_20260624_161031_structured.csv',
+        'C4\\traj1\\trajectory_the_first_trajectory_20260624_161031.csv',
+        None
+    ),
+    'traj2': (
+        'C4\\traj2\\imu_the_second_trajectory_20260624_160302_structured.csv',
+        'C4\\traj2\\trajectory_the_second_trajectory_20260624_160302.csv',
+        None
+    ),
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -390,8 +403,8 @@ def compute_errors(traj, gt_x, gt_y):
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    name = 'traj9'   # ← change to traj3 / traj4 / traj5 / traj6
-    imu_rel, gt_rel, initial_yaw_deg = TRAJS[name]
+    name = 'traj2'   # ← change to traj3 / traj4 / traj5 / traj6
+    imu_rel, gt_rel, initial_yaw_deg = C4BLOCK[name]
     imu_path = os.path.join(_PROJECT, imu_rel)
     gt_path  = os.path.join(_PROJECT, gt_rel)
 
@@ -405,7 +418,7 @@ if __name__ == '__main__':
         initial_yaw = detect_initial_heading_from_gt(gt_path)
         initial_yaw_deg = round(float(np.degrees(initial_yaw)), 1)
 
-    ts, acc_raw, gyro, fs = load_imu(imu_path)
+    ts, acc_raw, gyro, _, fs = load_imu(imu_path)
 
     # auto-detect vertical axis from accelerometer
     vertical_axis = detect_vertical_axis(acc_raw)
